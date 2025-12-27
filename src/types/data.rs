@@ -1,13 +1,11 @@
-use serde_derive::{Deserialize, Serialize};
-
+use crate::types::core::{HWID, LicenseKey};
 use crate::types::requests::LoginResponse;
+use serde_derive::Serialize;
 
-
-
-
-pub struct Login<'a> {
-    pub license: &'a str,
+#[derive(Serialize, Clone)]
+pub struct Login {
+    pub license: LicenseKey,
     pub time: u64,
-    pub hwid: &'a str,
+    pub hwid: HWID,
     pub response: LoginResponse
 }

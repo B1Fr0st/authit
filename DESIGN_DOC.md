@@ -37,6 +37,7 @@
 
 # type definitions
 License -
+    - license_key
     - products
     - HWID
     - sessions

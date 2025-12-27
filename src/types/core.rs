@@ -1,29 +1,50 @@
-use serde_derive::{Deserialize, Serialize};
+use serde_derive::Serialize;
+use std::sync::Arc;
 
+/*
+Owning Structure:
 
-#[derive(Serialize)]
-pub struct License<'a> {
-    pub products: Vec<LicenseProduct<'a>>,
-    pub hwid: &'a str,
+License |-> Sessions
+        |-> License Product
+
+Strings use Arc<str> for efficient deduplication - cheap to clone,
+no memory leaks, and shared storage for repeated values.
+*/
+
+// Owned types using Arc<str> for efficient string deduplication
+pub type LicenseKey = Arc<str>;
+pub type HWID = Arc<str>;
+pub type ProductId = Arc<str>;
+
+// Borrowed types for request deserialization (use &str to avoid allocation)
+pub type LicenseKeyRef<'a> = &'a str;
+pub type HWIDRef<'a> = &'a str;
+pub type ProductIdRef<'a> = &'a str;
+
+#[derive(Serialize, Clone)]
+pub struct License {
+    pub license_key: LicenseKey,
+    pub products: Vec<LicenseProduct>,
+    pub hwid: HWID,
     pub sessions: Vec<Session>
-}   
+}
 
-#[derive(Serialize)]
-pub struct LicenseProduct<'a> {
-    pub product: &'a Product<'a>,
+#[derive(Serialize, Clone)]
+pub struct LicenseProduct {
+    pub product: ProductId,
     pub time: u64,
     pub started_at: u64
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Product<'a> {
-    pub id: &'a str,
+#[derive(Serialize, Clone)]
+pub struct Product {
+    pub id: ProductId,
     pub frozen: bool,
     pub frozen_at: u64
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Session { 
+#[derive(Serialize, Clone)]
+pub struct Session {
     pub started: u64,
     pub ended: Option<u64>
 }
