@@ -162,4 +162,25 @@ impl ProductDb {
 
         Ok(())
     }
+
+    pub async fn get_all(
+        pool: &DbPool,
+    ) -> Result<Vec<Product>, Box<dyn std::error::Error>> {
+        let client = pool.get().await?;
+
+        let rows = client
+            .query("SELECT id, frozen, frozen_at FROM products", &[])
+            .await?;
+
+        Ok(rows.iter().map(|row| {
+            let id: String = row.get(0);
+            let frozen: bool = row.get(1);
+            let frozen_at: i64 = row.get(2);
+            Product {
+                id: Arc::from(id),
+                frozen,
+                frozen_at: frozen_at as u64,
+            }
+        }).collect())
+    }
 }

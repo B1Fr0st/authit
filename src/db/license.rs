@@ -136,4 +136,26 @@ impl LicenseDb {
             sessions,
         }))
     }
+
+    pub async fn get_all(
+        pool: &DbPool,
+    ) -> Result<Vec<License>, Box<dyn std::error::Error>> {
+        let client = pool.get().await?;
+
+        // Get all license keys
+        let rows = client
+            .query("SELECT license_key FROM licenses", &[])
+            .await?;
+
+        let mut licenses = Vec::new();
+
+        for row in rows {
+            let license_key: String = row.get(0);
+            if let Some(license) = Self::get(pool, &license_key).await? {
+                licenses.push(license);
+            }
+        }
+
+        Ok(licenses)
+    }
 }

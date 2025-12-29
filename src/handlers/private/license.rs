@@ -17,8 +17,23 @@ pub async fn generator(
     // Validate authorization
     extract_and_validate_auth(req)?;
 
+    tracing::info!("License generation request with {} products", request.products.len());
+
     // Generate license
     let response = generate_license(pool, &request).await;
+
+    match &response {
+        GeneratorResponse::Ok(key) => {
+            tracing::info!("Successfully generated license: {}", key);
+        },
+        GeneratorResponse::OneOrMoreInvalidProduct => {
+            tracing::warn!("License generation failed: invalid product(s)");
+        },
+        GeneratorResponse::FailedToGenerateValidLicense => {
+            tracing::error!("License generation failed: unable to generate unique key");
+        },
+    }
+
     Ok(Json(response))
 }
 

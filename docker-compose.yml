@@ -27,7 +27,7 @@ services:
     container_name: authit-app
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/authit
-      API_KEY: ${API_KEY:-default-insecure-key}
+      API_KEY: default-insecure-key
     ports:
       - "3000:3000"
     depends_on:

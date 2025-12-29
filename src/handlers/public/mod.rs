@@ -16,8 +16,14 @@ pub async fn auth(
 ) -> impl IntoResponse {
     // Extract headers
     let auth_data = match extract_auth_headers(req) {
-        Some(data) => data,
-        None => return poem::web::Json(LoginResponse::MissingHeaders),
+        Some(data) => {
+            tracing::debug!("Auth request for license: {}, product: {}", data.license, data.product);
+            data
+        },
+        None => {
+            tracing::warn!("Auth request missing required headers");
+            return poem::web::Json(LoginResponse::MissingHeaders);
+        }
     };
 
     // Get current timestamp
@@ -28,6 +34,8 @@ pub async fn auth(
 
     // Perform authorization logic
     let response = authorize_license(pool, &auth_data, now).await;
+
+    tracing::info!("Auth attempt for license {}: {:?}", auth_data.license, response);
 
     // Log the login attempt
     let _ = LoginData::log_login(pool, now, &auth_data, response).await;
