@@ -183,4 +183,42 @@ impl ProductDb {
             }
         }).collect())
     }
+
+    // Get all license keys that have a specific product
+    pub async fn get_licenses_with_product(
+        pool: &DbPool,
+        product_id: &str,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let client = pool.get().await?;
+
+        let rows = client
+            .query(
+                "SELECT DISTINCT license_key FROM license_products WHERE product_id = $1",
+                &[&product_id],
+            )
+            .await?;
+
+        Ok(rows.iter().map(|row| row.get(0)).collect())
+    }
+
+    // Extend the started_at time for a product across all licenses
+    // This is used when unfreezing to account for frozen time
+    pub async fn extend_started_at_for_product(
+        pool: &DbPool,
+        product_id: &str,
+        extension_seconds: u64,
+    ) -> Result<u64, Box<dyn std::error::Error>> {
+        let client = pool.get().await?;
+
+        let result = client
+            .execute(
+                "UPDATE license_products
+                 SET started_at = started_at + $1
+                 WHERE product_id = $2",
+                &[&(extension_seconds as i64), &product_id],
+            )
+            .await?;
+
+        Ok(result)
+    }
 }

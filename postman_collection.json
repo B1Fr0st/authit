@@ -152,14 +152,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"license\": \"{{testLicenseKey}}\",\n  \"products\": [\n    \"new-product-1\",\n    \"new-product-2\"\n  ]\n}"
+              "raw": "{\n  \"license\": \"{{testLicenseKey}}\",\n  \"products\": {\n    \"new-product-1\": 2592000,\n    \"new-product-2\": 7776000\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/private/license/add-product",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "private", "license", "add-product"]
             },
-            "description": "Add one or more products to an existing license"
+            "description": "Add one or more products to an existing license with time allocations (in seconds)"
           }
         },
         {
@@ -369,6 +369,62 @@
       "name": "Private - Product Management",
       "item": [
         {
+          "name": "Create Product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product\": \"{{testProductId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/private/product/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "private", "product", "create"]
+            },
+            "description": "Create a new product in the system. Products must exist before they can be added to licenses."
+          }
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product\": \"{{testProductId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/private/product/delete",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "private", "product", "delete"]
+            },
+            "description": "Delete a product from the system. WARNING: This will also remove the product from ALL licenses."
+          }
+        },
+        {
           "name": "Freeze Product",
           "request": {
             "method": "PUT",
@@ -393,7 +449,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "private", "product", "freeze"]
             },
-            "description": "Freeze a product. Frozen products cannot be authorized even with valid licenses."
+            "description": "Freeze a product. Frozen products cannot be authorized even with valid licenses. Returns AlreadyFrozen if product is already frozen."
           }
         },
         {
@@ -421,7 +477,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "private", "product", "unfreeze"]
             },
-            "description": "Unfreeze a product, allowing authorization again"
+            "description": "Unfreeze a product, allowing authorization again. Automatically extends license time to account for frozen period. Returns AlreadyUnfrozen if product is already unfrozen."
           }
         }
       ]

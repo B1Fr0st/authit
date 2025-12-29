@@ -223,7 +223,13 @@ paths:
       tags:
         - Private - License
       summary: Add products to license
-      description: Add one or more products to an existing license
+      description: |
+        Add one or more products to an existing license with specified time allocations.
+
+        **Behavior:**
+        - Uses current timestamp as started_at for new products
+        - If product already exists on license, it will be updated (UPSERT)
+        - All products must exist in the system before adding to license
       operationId: addProductToLicense
       security:
         - BearerAuth: []
@@ -236,8 +242,8 @@ paths:
             example:
               license: ABC123-DEF456-GHI789
               products:
-                - new-product-1
-                - new-product-2
+                new-product-1: 2592000
+                new-product-2: 7776000
       responses:
         '200':
           description: Result of adding products
@@ -245,6 +251,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AddProductResponse'
+              examples:
+                success:
+                  value: "Ok"
+                  summary: Products added successfully
+                invalidLicense:
+                  value: "InvalidLicense"
+                  summary: License doesn't exist
+                invalidProduct:
+                  value: "OneOrMoreInvalidProduct"
+                  summary: One or more products don't exist in system
         '401':
           $ref: '#/components/responses/UnauthorizedError'
 
@@ -492,7 +508,10 @@ paths:
       tags:
         - Private - Product
       summary: Freeze a product
-      description: Freezes a given product. Frozen products cannot be authorized even with valid licenses.
+      description: |
+        Freezes a given product. Frozen products cannot be authorized even with valid licenses.
+
+        **Note:** Attempting to freeze an already frozen product will return `AlreadyFrozen`.
       operationId: freezeProduct
       security:
         - BearerAuth: []
@@ -516,7 +535,17 @@ paths:
             application/json:
               schema:
                 type: string
-                enum: [Ok, InvalidProduct]
+                enum: [Ok, InvalidProduct, AlreadyFrozen]
+              examples:
+                success:
+                  value: "Ok"
+                  summary: Product frozen successfully
+                notFound:
+                  value: "InvalidProduct"
+                  summary: Product doesn't exist
+                alreadyFrozen:
+                  value: "AlreadyFrozen"
+                  summary: Product is already frozen
         '401':
           $ref: '#/components/responses/UnauthorizedError'
 
@@ -525,7 +554,14 @@ paths:
       tags:
         - Private - Product
       summary: Unfreeze a product
-      description: Unfreezes a given product, allowing it to be authorized again
+      description: |
+        Unfreezes a given product, allowing it to be authorized again.
+
+        **Important:** When unfreezing, the system automatically extends the started_at time
+        for all licenses with this product by the frozen duration. This ensures that time
+        spent frozen doesn't count against users' license time.
+
+        **Note:** Attempting to unfreeze an already unfrozen product will return `AlreadyUnfrozen`.
       operationId: unfreezeProduct
       security:
         - BearerAuth: []
@@ -549,7 +585,101 @@ paths:
             application/json:
               schema:
                 type: string
+                enum: [Ok, InvalidProduct, AlreadyUnfrozen]
+              examples:
+                success:
+                  value: "Ok"
+                  summary: Product unfrozen successfully
+                notFound:
+                  value: "InvalidProduct"
+                  summary: Product doesn't exist
+                alreadyUnfrozen:
+                  value: "AlreadyUnfrozen"
+                  summary: Product is already unfrozen
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/product/create:
+    put:
+      tags:
+        - Private - Product
+      summary: Create a new product
+      description: Creates a new product in the system. Products must be created before they can be added to licenses.
+      operationId: createProduct
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product
+              properties:
+                product:
+                  type: string
+                  description: The product ID to create
+                  example: premium-software-v1
+      responses:
+        '200':
+          description: Create result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok, ProductAlreadyExists]
+              examples:
+                success:
+                  value: "Ok"
+                  summary: Product created successfully
+                alreadyExists:
+                  value: "ProductAlreadyExists"
+                  summary: Product ID is already in use
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/product/delete:
+    delete:
+      tags:
+        - Private - Product
+      summary: Delete a product
+      description: |
+        Deletes a product from the system.
+
+        **Warning:** This will also remove the product from ALL licenses that have it
+        due to cascade deletion. Use with caution.
+      operationId: deleteProduct
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product
+              properties:
+                product:
+                  type: string
+                  description: The product ID to delete
+                  example: premium-software-v1
+      responses:
+        '200':
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                type: string
                 enum: [Ok, InvalidProduct]
+              examples:
+                success:
+                  value: "Ok"
+                  summary: Product deleted successfully
+                notFound:
+                  value: "InvalidProduct"
+                  summary: Product doesn't exist
         '401':
           $ref: '#/components/responses/UnauthorizedError'
 
@@ -759,13 +889,15 @@ components:
           description: The license key
           example: ABC123-DEF456-GHI789
         products:
-          type: array
-          description: List of product IDs to add
-          items:
-            type: string
+          type: object
+          description: Map of product IDs to time in seconds
+          additionalProperties:
+            type: integer
+            format: int64
+            description: Time allocation in seconds
           example:
-            - new-product-1
-            - new-product-2
+            new-product-1: 2592000
+            new-product-2: 7776000
 
     AddProductResponse:
       type: string
@@ -773,7 +905,6 @@ components:
         - Ok
         - InvalidLicense
         - OneOrMoreInvalidProduct
-        - LicenseExpired
 
     License:
       type: object

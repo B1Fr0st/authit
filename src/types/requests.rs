@@ -68,7 +68,7 @@ pub enum GeneratorResponse {
 #[derive(Deserialize)]
 pub struct AddProductRequest {
     pub license: String,
-    pub products: Vec<String>, //TODO: revamp so we don't have to allocate string
+    pub products: HashMap<String, u64>, // product_id -> time in seconds
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -77,5 +77,61 @@ pub enum AddProductResponse {
     Ok,
     InvalidLicense,
     OneOrMoreInvalidProduct,
-    LicenseExpired,
+}
+
+// /delete-product
+
+#[derive(Deserialize)]
+pub struct DeleteProductRequest {
+    pub license: String,
+    pub products: Vec<String>, // product_ids to remove
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize)]
+pub enum DeleteProductResponse {
+    Ok,
+    InvalidLicense,
+    OneOrMoreInvalidProduct,
+}
+
+// /freeze & /unfreeze
+#[derive(Deserialize)]
+pub struct FreezeProductRequest {
+    pub product: String,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize)]
+pub enum FreezeProductResponse {
+    Ok,
+    InvalidProduct,
+    AlreadyFrozen,
+    AlreadyUnfrozen,
+}
+
+// /create (product)
+#[derive(Deserialize)]
+pub struct CreateProductRequest {
+    pub product: String,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize)]
+pub enum CreateProductResponse {
+    Ok,
+    ProductAlreadyExists,
+}
+
+// /delete (product)
+#[derive(Deserialize)]
+pub struct DeleteProductFromSystemRequest {
+    pub product: String,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize)]
+pub enum DeleteProductFromSystemResponse {
+    Ok,
+    InvalidProduct,
 }

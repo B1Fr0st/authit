@@ -16,8 +16,8 @@
 -   # note - authorization should be performed using the Authorization: header in https requests
         /license - all license methods
 -[FIN]           POST     /generator - generate a new license key with the specified product(s) & time
--[WIP]           PUT      /add-product - add product(s)to the specified license 
--[WIP]           PUT      /delete-product - remove product(s) from the specified license
+-[FIN]           PUT      /add-product - add product(s) to the specified license
+-[FIN]           PUT      /delete-product - remove product(s) from the specified license
 -[WIP]           POST     /ban - ban the specified license, but NOT their HWID
 -[WIP]           POST     /unban - unban the specified license, but NOT their hwid
 -[WIP]           DELETE   /delete - delete specified license
@@ -26,8 +26,10 @@
 -[WIP]           POST     /ban - ban a hwid across ALL licenses
 -[WIP]           POST     /unban - unban a hwid across ALL licenses
         /product - all product methods
--[WIP]           PUT      /freeze - freezes a given product
--[WIP]           PUT      /unfreeze - unfreezes a given product
+-[FIN]           PUT      /freeze - freezes a given product
+-[FIN]           PUT      /unfreeze - unfreezes a given product
+-[FIN]           PUT      /create - creates a given product
+-[FIN]           DELETE   /delete - deletes a given product
         /data - all monitoring/data endpoints
 -[FIN]           GET      /licenses - returns all licenses and their sessions
 -[FIN]           GET      /products - returns all current products in the system

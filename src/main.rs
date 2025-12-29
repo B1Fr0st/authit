@@ -1,4 +1,4 @@
-use poem::{Route, Server, get, post, listener::TcpListener, middleware::AddData, EndpointExt};
+use poem::{Route, Server, get, post, put, delete, listener::TcpListener, middleware::AddData, EndpointExt};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub mod types;
@@ -75,6 +75,16 @@ async fn main() -> Result<(), std::io::Error> {
                             "/license",
                             Route::new()
                                 .at("/generator", post(crate::handlers::private::license::generator))
+                                .at("/add-product", put(crate::handlers::private::license::add_product))
+                                .at("/delete-product", put(crate::handlers::private::license::delete_product))
+                        )
+                        .nest(
+                            "/product",
+                            Route::new()
+                                .at("/freeze", put(crate::handlers::private::product::freeze))
+                                .at("/unfreeze", put(crate::handlers::private::product::unfreeze))
+                                .at("/create", put(crate::handlers::private::product::create))
+                                .at("/delete", delete(crate::handlers::private::product::delete))
                         )
                         .nest(
                             "/data",
