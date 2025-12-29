@@ -16,10 +16,6 @@ pub type LicenseKey = Arc<str>;
 pub type HWID = Arc<str>;
 pub type ProductId = Arc<str>;
 
-// Borrowed types for request deserialization (use &str to avoid allocation)
-pub type LicenseKeyRef<'a> = &'a str;
-pub type HWIDRef<'a> = &'a str;
-pub type ProductIdRef<'a> = &'a str;
 
 #[derive(Serialize, Clone)]
 pub struct License {

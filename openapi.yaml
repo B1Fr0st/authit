@@ -1,0 +1,868 @@
+openapi: 3.0.3
+info:
+  title: Authit License Server API
+  description: |
+    A license management and authorization server for software licensing.
+
+    ## Authentication
+
+    - **Public Endpoints** (`/api/v1/public/*`) - No authentication required
+    - **Private Endpoints** (`/api/v1/private/*`) - Require API key authentication via Bearer token
+
+    All sensitive data (license keys, HWIDs, product IDs) are transmitted via HTTP headers for enhanced security.
+  version: 0.1.0
+  contact:
+    name: Authit API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Public
+    description: Public endpoints accessible without authentication
+  - name: Private - License
+    description: License management endpoints (requires authentication)
+  - name: Private - HWID
+    description: Hardware ID management endpoints (requires authentication)
+  - name: Private - Product
+    description: Product management endpoints (requires authentication)
+  - name: Private - Data
+    description: Data and monitoring endpoints (requires authentication)
+
+paths:
+  /api/v1/public/health:
+    get:
+      tags:
+        - Public
+      summary: Health check
+      description: Simple health check endpoint to verify the server is running
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /api/v1/public/auth:
+    get:
+      tags:
+        - Public
+      summary: Authorize license
+      description: |
+        Authorizes a license key with a hardware ID (HWID) for a specific product.
+
+        **Behavior:**
+        - First request with a new license binds the HWID to the license
+        - Subsequent requests must use the same HWID
+        - Checks if the product exists in the license
+        - Verifies the product is not frozen
+        - Validates the license hasn't expired
+        - Logs the authorization attempt
+      operationId: authorizeLicense
+      parameters:
+        - name: X-License-Key
+          in: header
+          required: true
+          description: The license key to authorize
+          schema:
+            type: string
+            example: ABC123-DEF456-GHI789
+        - name: X-Product-ID
+          in: header
+          required: true
+          description: The product ID to check
+          schema:
+            type: string
+            example: premium-software-v1
+        - name: X-HWID
+          in: header
+          required: true
+          description: Hardware identifier for the client machine
+          schema:
+            type: string
+            example: machine-12345
+      responses:
+        '200':
+          description: Authorization result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                success:
+                  value: "Ok"
+                  summary: Successful authorization
+                invalidLicense:
+                  value: "InvalidLicense"
+                  summary: License key doesn't exist or doesn't have access to product
+                hwidMismatch:
+                  value: "HWIDMismatch"
+                  summary: HWID doesn't match the one bound to license
+                expired:
+                  value: "LicenseExpired"
+                  summary: License time has expired
+                frozen:
+                  value: "LicenseFrozen"
+                  summary: Product is frozen/suspended
+                missingHeaders:
+                  value: "MissingHeaders"
+                  summary: Required headers are missing
+
+  /api/v1/public/product:
+    get:
+      tags:
+        - Public
+      summary: Get product information
+      description: Retrieves information about a specific product subscription on a license
+      operationId: getProductInfo
+      parameters:
+        - name: X-License-Key
+          in: header
+          required: true
+          description: The license key to query
+          schema:
+            type: string
+            example: ABC123-DEF456-GHI789
+        - name: X-Product-ID
+          in: header
+          required: true
+          description: The product ID to retrieve information for
+          schema:
+            type: string
+            example: premium-software-v1
+      responses:
+        '200':
+          description: Product information or error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+              examples:
+                success:
+                  value:
+                    Ok:
+                      product: premium-software-v1
+                      time: 2592000
+                      started_at: 1703001234
+                  summary: Successful product retrieval
+                invalidLicense:
+                  value: "InvalidLicense"
+                  summary: License key doesn't exist
+                invalidProduct:
+                  value: "InvalidProduct"
+                  summary: Product not found or not associated with license
+
+  /api/v1/private/license/generator:
+    post:
+      tags:
+        - Private - License
+      summary: Generate new license
+      description: |
+        Generates a new license key with the specified products and time allocations.
+
+        The license key is automatically generated in the format: XXXXX-XXXXX-XXXXX
+
+        **Behavior:**
+        - Validates all product IDs exist
+        - Generates a unique license key (retries up to 10 times)
+        - Sets current timestamp as started_at for all products
+        - HWID is initially empty and will be bound on first /auth call
+      operationId: generateLicense
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneratorRequest'
+            examples:
+              singleProduct:
+                summary: Single product license
+                value:
+                  products:
+                    premium-software-v1: 2592000
+              multipleProducts:
+                summary: Multiple products license
+                value:
+                  products:
+                    premium-software-v1: 2592000
+                    addon-pack: 7776000
+                    pro-features: 2592000
+      responses:
+        '200':
+          description: License generation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneratorResponse'
+              examples:
+                success:
+                  value:
+                    Ok: ABCD1-EFGH2-IJKL3
+                  summary: License generated successfully
+                invalidProduct:
+                  value: "OneOrMoreInvalidProduct"
+                  summary: One or more product IDs don't exist
+                failed:
+                  value: "FailedToGenerateValidLicense"
+                  summary: Failed to generate unique key
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/license/add-product:
+    put:
+      tags:
+        - Private - License
+      summary: Add products to license
+      description: Add one or more products to an existing license
+      operationId: addProductToLicense
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddProductRequest'
+            example:
+              license: ABC123-DEF456-GHI789
+              products:
+                - new-product-1
+                - new-product-2
+      responses:
+        '200':
+          description: Result of adding products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddProductResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/license/delete-product:
+    put:
+      tags:
+        - Private - License
+      summary: Remove products from license
+      description: Remove one or more products from an existing license
+      operationId: deleteProductFromLicense
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - license
+                - products
+              properties:
+                license:
+                  type: string
+                  description: The license key
+                  example: ABC123-DEF456-GHI789
+                products:
+                  type: array
+                  description: List of product IDs to remove
+                  items:
+                    type: string
+                  example:
+                    - product-to-remove
+      responses:
+        '200':
+          description: Result of removing products
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok, InvalidLicense, OneOrMoreInvalidProduct]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/license/ban:
+    post:
+      tags:
+        - Private - License
+      summary: Ban a license
+      description: Ban the specified license, but NOT their HWID. The license cannot be used for authorization.
+      operationId: banLicense
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - license
+              properties:
+                license:
+                  type: string
+                  description: The license key to ban
+                  example: ABC123-DEF456-GHI789
+      responses:
+        '200':
+          description: Ban result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok, InvalidLicense]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/license/unban:
+    post:
+      tags:
+        - Private - License
+      summary: Unban a license
+      description: Unban the specified license, allowing it to be used for authorization again
+      operationId: unbanLicense
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - license
+              properties:
+                license:
+                  type: string
+                  description: The license key to unban
+                  example: ABC123-DEF456-GHI789
+      responses:
+        '200':
+          description: Unban result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok, InvalidLicense]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/license/delete:
+    delete:
+      tags:
+        - Private - License
+      summary: Delete a license
+      description: Permanently delete the specified license and all associated data
+      operationId: deleteLicense
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - license
+              properties:
+                license:
+                  type: string
+                  description: The license key to delete
+                  example: ABC123-DEF456-GHI789
+      responses:
+        '200':
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok, InvalidLicense]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/license/reset-hwid:
+    put:
+      tags:
+        - Private - License
+      summary: Reset license HWID
+      description: Reset the HWID associated with the given license, allowing it to be bound to a new machine
+      operationId: resetLicenseHwid
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - license
+              properties:
+                license:
+                  type: string
+                  description: The license key to reset HWID for
+                  example: ABC123-DEF456-GHI789
+      responses:
+        '200':
+          description: Reset result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok, InvalidLicense]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/hwid/ban:
+    post:
+      tags:
+        - Private - HWID
+      summary: Ban a HWID
+      description: Ban a hardware ID across ALL licenses. Any license with this HWID will be unable to authorize.
+      operationId: banHwid
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - hwid
+              properties:
+                hwid:
+                  type: string
+                  description: The hardware ID to ban
+                  example: machine-12345
+      responses:
+        '200':
+          description: Ban result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/hwid/unban:
+    post:
+      tags:
+        - Private - HWID
+      summary: Unban a HWID
+      description: Unban a hardware ID across ALL licenses
+      operationId: unbanHwid
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - hwid
+              properties:
+                hwid:
+                  type: string
+                  description: The hardware ID to unban
+                  example: machine-12345
+      responses:
+        '200':
+          description: Unban result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/product/freeze:
+    put:
+      tags:
+        - Private - Product
+      summary: Freeze a product
+      description: Freezes a given product. Frozen products cannot be authorized even with valid licenses.
+      operationId: freezeProduct
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product
+              properties:
+                product:
+                  type: string
+                  description: The product ID to freeze
+                  example: premium-software-v1
+      responses:
+        '200':
+          description: Freeze result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok, InvalidProduct]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/product/unfreeze:
+    put:
+      tags:
+        - Private - Product
+      summary: Unfreeze a product
+      description: Unfreezes a given product, allowing it to be authorized again
+      operationId: unfreezeProduct
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - product
+              properties:
+                product:
+                  type: string
+                  description: The product ID to unfreeze
+                  example: premium-software-v1
+      responses:
+        '200':
+          description: Unfreeze result
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Ok, InvalidProduct]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/data/licenses:
+    get:
+      tags:
+        - Private - Data
+      summary: Get all licenses
+      description: Returns all licenses and their sessions for monitoring and analytics
+      operationId: getAllLicenses
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of all licenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/License'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/data/products:
+    get:
+      tags:
+        - Private - Data
+      summary: Get all products
+      description: Returns all current products in the system
+      operationId: getAllProducts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of all products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/data/logins:
+    get:
+      tags:
+        - Private - Data
+      summary: Get authorization attempts
+      description: Returns all authorization attempts (login logs) for monitoring
+      operationId: getLoginLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of logs to return
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 10000
+      responses:
+        '200':
+          description: List of login attempts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Login'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/private/data/logs:
+    get:
+      tags:
+        - Private - Data
+      summary: Get system logs
+      description: Returns the current system logs for debugging and monitoring
+      operationId: getSystemLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of log entries to return
+          schema:
+            type: integer
+            default: 1000
+            minimum: 1
+            maximum: 100000
+      responses:
+        '200':
+          description: System logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    timestamp:
+                      type: integer
+                      format: int64
+                      description: Unix timestamp
+                    level:
+                      type: string
+                      enum: [debug, info, warn, error]
+                    message:
+                      type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: |
+        API key for private endpoints. Set via the `API_KEY` environment variable.
+
+        Example: `Authorization: Bearer your-api-key-here`
+
+  responses:
+    UnauthorizedError:
+      description: Authentication failed - Invalid or missing API key
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Unauthorized - Valid API key required
+
+  schemas:
+    LoginResponse:
+      type: string
+      enum:
+        - Ok
+        - InvalidLicense
+        - HWIDMismatch
+        - LicenseExpired
+        - LicenseFrozen
+        - MissingHeaders
+      description: |
+        Authorization response status:
+        - `Ok` - Authorization successful
+        - `InvalidLicense` - License doesn't exist or doesn't have access to product
+        - `HWIDMismatch` - HWID doesn't match the one bound to license
+        - `LicenseExpired` - License time has expired
+        - `LicenseFrozen` - Product is frozen/suspended
+        - `MissingHeaders` - Required headers are missing
+
+    ProductResponse:
+      oneOf:
+        - type: string
+          enum:
+            - InvalidLicense
+            - InvalidProduct
+            - MissingHeaders
+        - type: object
+          properties:
+            Ok:
+              $ref: '#/components/schemas/LicenseProduct'
+
+    GeneratorRequest:
+      type: object
+      required:
+        - products
+      properties:
+        products:
+          type: object
+          description: Map of product IDs to time in seconds
+          additionalProperties:
+            type: integer
+            format: int64
+            description: Time allocation in seconds
+          example:
+            premium-software-v1: 2592000
+            addon-pack: 7776000
+
+    GeneratorResponse:
+      oneOf:
+        - type: object
+          properties:
+            Ok:
+              type: string
+              description: Generated license key
+              example: ABCD1-EFGH2-IJKL3
+        - type: string
+          enum:
+            - OneOrMoreInvalidProduct
+            - FailedToGenerateValidLicense
+
+    AddProductRequest:
+      type: object
+      required:
+        - license
+        - products
+      properties:
+        license:
+          type: string
+          description: The license key
+          example: ABC123-DEF456-GHI789
+        products:
+          type: array
+          description: List of product IDs to add
+          items:
+            type: string
+          example:
+            - new-product-1
+            - new-product-2
+
+    AddProductResponse:
+      type: string
+      enum:
+        - Ok
+        - InvalidLicense
+        - OneOrMoreInvalidProduct
+        - LicenseExpired
+
+    License:
+      type: object
+      properties:
+        license_key:
+          type: string
+          description: Unique license identifier
+          example: ABC123-DEF456-GHI789
+        products:
+          type: array
+          description: Products associated with this license
+          items:
+            $ref: '#/components/schemas/LicenseProduct'
+        hwid:
+          type: string
+          description: Hardware ID bound to this license (empty until first auth)
+          example: machine-12345
+        sessions:
+          type: array
+          description: Authorization sessions for this license
+          items:
+            $ref: '#/components/schemas/Session'
+
+    LicenseProduct:
+      type: object
+      properties:
+        product:
+          type: string
+          description: Product identifier
+          example: premium-software-v1
+        time:
+          type: integer
+          format: int64
+          description: Total subscription time in seconds
+          example: 2592000
+        started_at:
+          type: integer
+          format: int64
+          description: Unix timestamp when subscription started
+          example: 1703001234
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Product identifier
+          example: premium-software-v1
+        frozen:
+          type: boolean
+          description: Whether the product is frozen
+          example: false
+        frozen_at:
+          type: integer
+          format: int64
+          description: Unix timestamp when product was frozen (0 if not frozen)
+          example: 0
+
+    Session:
+      type: object
+      properties:
+        started:
+          type: integer
+          format: int64
+          description: Unix timestamp when session started
+          example: 1703001234
+        ended:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix timestamp when session ended (null if still active)
+          example: 1703087634
+
+    Login:
+      type: object
+      description: Login attempt record
+      properties:
+        license:
+          type: string
+          description: License key used in attempt
+          example: ABC123-DEF456-GHI789
+        time:
+          type: integer
+          format: int64
+          description: Unix timestamp of attempt
+          example: 1703001234
+        hwid:
+          type: string
+          description: Hardware ID used in attempt
+          example: machine-12345
+        response:
+          $ref: '#/components/schemas/LoginResponse'

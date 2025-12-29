@@ -2,23 +2,19 @@ use std::collections::HashMap;
 
 use serde_derive::{Deserialize, Serialize};
 
-use crate::types::core::{HWIDRef, LicenseKeyRef, LicenseProduct, ProductIdRef};
+use crate::types::core::LicenseProduct;
 
 
 
 
 // /auth
 
-
-
-#[derive(Serialize, Deserialize)]
-pub struct LoginRequest<'a> {
-    #[serde(borrow)]
-    pub license: LicenseKeyRef<'a>,
-    #[serde(borrow)]
-    pub product: ProductIdRef<'a>,
-    #[serde(borrow)]
-    pub hwid: HWIDRef<'a>,
+// Struct to hold auth data extracted from headers
+#[derive(Debug, Clone)]
+pub struct AuthHeaders {
+    pub license: String,
+    pub product: String,
+    pub hwid: String,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -28,25 +24,26 @@ pub enum LoginResponse {
     InvalidLicense,
     HWIDMismatch,
     LicenseExpired,
-    LicenseFrozen
+    LicenseFrozen,
+    MissingHeaders,
 }
 
 
 
 // /product
-#[derive(Deserialize)]
-pub struct ProductRequest<'a> {
-    #[serde(borrow)]
-    pub license: LicenseKeyRef<'a>,
-    #[serde(borrow)]
-    pub product: ProductIdRef<'a>,
-    //no hwid because we can call this without caring about hwid
+
+// Struct to hold product query data extracted from headers
+#[derive(Debug, Clone)]
+pub struct ProductHeaders {
+    pub license: String,
+    pub product: String,
 }
 
 #[derive(Serialize)]
 pub enum ProductResponse {
     InvalidProduct,
     InvalidLicense,
+    MissingHeaders,
     Ok(LicenseProduct)
 }
 
@@ -69,9 +66,8 @@ pub enum GeneratorResponse {
 // /add-product
 
 #[derive(Deserialize)]
-pub struct AddProductRequest<'a> {
-    #[serde(borrow)]
-    pub license: LicenseKeyRef<'a>,
+pub struct AddProductRequest {
+    pub license: String,
     pub products: Vec<String>, //TODO: revamp so we don't have to allocate string
 }
 

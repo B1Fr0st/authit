@@ -1,5 +1,5 @@
 use crate::db::DbPool;
-use crate::types::requests::{LoginRequest, LoginResponse};
+use crate::types::requests::{AuthHeaders, LoginResponse};
 use crate::types::data::Login;
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ impl LoginData {
     pub async fn log_login(
         pool: &DbPool,
         time: u64,
-        request: LoginRequest<'_>,
+        auth: &AuthHeaders,
         response: LoginResponse,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = pool.get().await?;
@@ -20,13 +20,14 @@ impl LoginData {
             LoginResponse::HWIDMismatch => "HWIDMismatch",
             LoginResponse::LicenseExpired => "LicenseExpired",
             LoginResponse::LicenseFrozen => "LicenseFrozen",
+            LoginResponse::MissingHeaders => "MissingHeaders",
         };
 
         client
             .execute(
                 "INSERT INTO login_logs (license_key, time, hwid, response)
                  VALUES ($1, $2, $3, $4)",
-                &[&request.license, &(time as i64), &request.hwid, &response_str],
+                &[&auth.license, &(time as i64), &auth.hwid, &response_str],
             )
             .await?;
 
@@ -108,6 +109,7 @@ impl LoginData {
             "HWIDMismatch" => LoginResponse::HWIDMismatch,
             "LicenseExpired" => LoginResponse::LicenseExpired,
             "LicenseFrozen" => LoginResponse::LicenseFrozen,
+            "MissingHeaders" => LoginResponse::MissingHeaders,
             _ => LoginResponse::InvalidLicense, // Default fallback
         }
     }
