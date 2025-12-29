@@ -9,30 +9,30 @@
 
 /api/v1
     /public - all functions that should be called without any authorization
--       GET      /auth - authorize a license + hwid for a given product
--       GET      /product - gets the time remaining & product status for a given product in a license
--       GET      /health - heartbeat
+-[FIN]       GET      /auth - authorize a license + hwid for a given product
+-[FIN]       GET      /product - gets the time remaining & product status for a given product in a license
+-[FIN]       GET      /health - heartbeat
     /private - all functions that REQUIRE authorization
 -   # note - authorization should be performed using the Authorization: header in https requests
         /license - all license methods
--           POST     /generator - generate a new license key with the specified product(s) & time
--           PUT      /add-product - add product(s)to the specified license 
--           PUT      /delete-product - remove product(s) from the specified license
--           POST     /ban - ban the specified license, but NOT their HWID
--           POST     /unban - unban the specified license, but NOT their hwid
--           DELETE   /delete - delete specified license
--           PUT      /reset-hwid - reset the HWID associated with the given license
+-[FIN]           POST     /generator - generate a new license key with the specified product(s) & time
+-[WIP]           PUT      /add-product - add product(s)to the specified license 
+-[WIP]           PUT      /delete-product - remove product(s) from the specified license
+-[WIP]           POST     /ban - ban the specified license, but NOT their HWID
+-[WIP]           POST     /unban - unban the specified license, but NOT their hwid
+-[WIP]           DELETE   /delete - delete specified license
+-[WIP]           PUT      /reset-hwid - reset the HWID associated with the given license
         /hwid - all HWID methods
--           POST     /ban - ban a hwid across ALL licenses
--           POST     /unban - unban a hwid across ALL licenses
+-[WIP]           POST     /ban - ban a hwid across ALL licenses
+-[WIP]           POST     /unban - unban a hwid across ALL licenses
         /product - all product methods
--           PUT      /freeze - freezes a given product
--           PUT      /unfreeze - unfreezes a given product
+-[WIP]           PUT      /freeze - freezes a given product
+-[WIP]           PUT      /unfreeze - unfreezes a given product
         /data - all monitoring/data endpoints
--           GET      /licenses - returns all licenses and their sessions
--           GET      /products - returns all current products in the system
--           GET      /logins - returns all authorization attempts
--           GET      /logs - returns the current logs
+-[FIN]           GET      /licenses - returns all licenses and their sessions
+-[FIN]           GET      /products - returns all current products in the system
+-[FIN]           GET      /logins - returns all authorization attempts
+-[FIN]           GET      /logs - returns the current logs
 
 
 # type definitions
