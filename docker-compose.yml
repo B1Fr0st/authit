@@ -20,6 +20,22 @@ services:
     networks:
       - authit-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: authit-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - authit-network
+
   authit:
     build:
       context: .
@@ -27,11 +43,16 @@ services:
     container_name: authit-app
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/authit
+      REDIS_URL: redis://redis:6379
       API_KEY: default-insecure-key
+      JWT_SECRET: your-secret-key-change-in-production
+      KEY_PREFIX: authit-
     ports:
-      - "3000:3000"
+      - "5593:5593"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - authit-network
@@ -39,6 +60,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   authit-network:

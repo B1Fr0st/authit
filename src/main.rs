@@ -1,106 +1,83 @@
-use poem::{Route, Server, get, post, put, delete, listener::TcpListener, middleware::AddData, EndpointExt};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use actix_web::{web, App, HttpServer};
+use sqlx::postgres::PgPoolOptions;
+use tracing::{Level, error, info};
+use tracing_subscriber;
 
-pub mod types;
-pub mod handlers;
-pub mod db;
-pub mod data;
-pub mod logging;
+mod handlers;
+mod auth;
+use crate::handlers::*;
 
-#[tokio::main]
-async fn main() -> Result<(), std::io::Error> {
-    // Initialize logging system
-    let log_store = logging::init_log_store();
 
-    // Set up tracing subscriber with both console output and in-memory storage
-    let in_memory_layer = logging::InMemoryLayer::new(log_store);
-    let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_target(true)
-        .with_level(true);
+pub struct AppState {
+    db_pool: sqlx::PgPool,
+    redis_client: redis::Client,
+}
 
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .with(in_memory_layer)
-        .with(tracing_subscriber::EnvFilter::from_default_env()
-            .add_directive(tracing::Level::INFO.into()))
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    // Initialize tracing subscriber to print to stdout
+    tracing_subscriber::fmt()
+        .with_max_level(Level::INFO)
         .init();
 
-    tracing::info!("Starting Authit License Server");
+    let pool = match PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&std::env::var("DATABASE_URL").expect("DATABASE_URL env var not set")).await {
+            Ok(pool) => {
+            info!("Connected to database @ {}", std::env::var("DATABASE_URL").unwrap()); //unwrap is safe due to expect earlier
+            pool
+        }
+        Err(err) => {
+            error!("Failed to connect to database: {}", err);
+            std::process::exit(1);
+        }
+    };
 
-    // Get database URL from environment or use default
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/authit".to_string());
+    // Connect to Redis
+    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let redis_client = match redis::Client::open(redis_url.as_str()) {
+        Ok(client) => {
+            // Test connection
+            match client.get_multiplexed_async_connection().await {
+                Ok(_) => {
+                    info!("Connected to Redis @ {}", redis_url);
+                    client
+                }
+                Err(err) => {
+                    error!("Failed to connect to Redis: {}", err);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Err(err) => {
+            error!("Failed to create Redis client: {}", err);
+            std::process::exit(1);
+        }
+    };
 
-    // Create database connection pool
-    let pool = db::create_pool(&database_url)
-        .expect("Failed to create database pool");
-
-    tracing::info!("Database connection pool created");
-
-    // Initialize database tables
-    db::init_db(&pool)
-        .await
-        .expect("Failed to initialize database");
-
-    tracing::info!("Database initialized successfully");
-
-    // Get API key from environment or use default (warn if using default)
-    let api_key = std::env::var("API_KEY")
-        .unwrap_or_else(|_| {
-            tracing::warn!("Using default API key - NOT SECURE! Set API_KEY environment variable for production!");
-            "default-insecure-key".to_string()
-        });
-
-    if api_key == "default-insecure-key" {
-        tracing::warn!("API Key: DEFAULT (insecure)");
-    } else {
-        tracing::info!("API Key: CUSTOM (configured)");
-    }
-
-    let app = Route::new()
-        .nest(
-            "/api/v1",
-            Route::new()
-                .nest(
-                    "/public",
-                    Route::new()
-                        .at("/health", get(crate::handlers::public::health))
-                        .at("/auth", get(crate::handlers::public::auth))
-                        .at("/product", get(crate::handlers::public::product_handler))
-                )
-                .nest(
-                    "/private",
-                    Route::new()
-                        .nest(
-                            "/license",
-                            Route::new()
-                                .at("/generator", post(crate::handlers::private::license::generator))
-                                .at("/add-product", put(crate::handlers::private::license::add_product))
-                                .at("/delete-product", put(crate::handlers::private::license::delete_product))
-                        )
-                        .nest(
-                            "/product",
-                            Route::new()
-                                .at("/freeze", put(crate::handlers::private::product::freeze))
-                                .at("/unfreeze", put(crate::handlers::private::product::unfreeze))
-                                .at("/create", put(crate::handlers::private::product::create))
-                                .at("/delete", delete(crate::handlers::private::product::delete))
-                        )
-                        .nest(
-                            "/data",
-                            Route::new()
-                                .at("/licenses", get(crate::handlers::private::data::get_licenses))
-                                .at("/products", get(crate::handlers::private::data::get_products))
-                                .at("/logins", get(crate::handlers::private::data::get_logins))
-                                .at("/logs", get(crate::handlers::private::data::get_logs))
-                        )
-                )
-        )
-        .with(AddData::new(pool));
-
-    tracing::info!("Server listening on http://0.0.0.0:3000");
-
-    Server::new(TcpListener::bind("0.0.0.0:3000"))
-        .run(app)
-        .await
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(AppState {
+                db_pool: pool.clone(),
+                redis_client: redis_client.clone()
+            }))
+            .service(
+                web::scope("/api/v1")
+                    .route("/health-check", web::get().to(public::health_check))
+                    .route("/auth", web::post().to(public::auth))
+                    .service(web::scope("/account")
+                        .route("/login", web::post().to(account::login))
+                        .route("/redeem", web::post().to(account::redeem))
+                        .route("/set-role", web::post().to(account::set_role))
+                        .route("/products", web::get().to(account::products))
+                    )
+                    .service(web::scope("/product")
+                        .route("/generate-key", web::post().to(product::generate_key))
+                        .route("/compensate", web::post().to(product::compensate))
+                    )
+            )
+    })
+    .bind(("0.0.0.0", 5593))?
+    .run()
+    .await
 }
