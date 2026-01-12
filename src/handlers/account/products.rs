@@ -1,6 +1,6 @@
 use actix_web::{HttpResponse, web};
 use tracing::{error, info};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::AppState;
 use crate::auth::JwtClaims;
@@ -11,6 +11,7 @@ pub struct ProductLicense {
     product_name: String,
     expires_at: String,
     time_remaining_seconds: i64,
+    frozen: bool,
 }
 
 #[derive(Serialize)]
@@ -26,8 +27,8 @@ async fn get_user_products(
     pool: &sqlx::PgPool,
     user_id: &str,
 ) -> Result<Vec<ProductLicense>, sqlx::Error> {
-    let rows = sqlx::query_as::<_, (String, String, String, i64)>(
-        "SELECT ul.product_id, p.name, ul.expires_at::TEXT, EXTRACT(EPOCH FROM (ul.expires_at - NOW()))::BIGINT
+    let rows = sqlx::query_as::<_, (String, String, String, i64, bool)>(
+        "SELECT ul.product_id, p.name, ul.expires_at::TEXT, EXTRACT(EPOCH FROM (ul.expires_at - NOW()))::BIGINT, p.frozen
          FROM user_licenses ul
          JOIN products p ON ul.product_id = p.id
          WHERE ul.user_id = $1 AND ul.expires_at > NOW()
@@ -39,11 +40,12 @@ async fn get_user_products(
 
     Ok(rows
         .into_iter()
-        .map(|(product_id, product_name, expires_at, time_remaining_seconds)| ProductLicense {
+        .map(|(product_id, product_name, expires_at, time_remaining_seconds, frozen)| ProductLicense {
             product_id,
             product_name,
             expires_at,
             time_remaining_seconds,
+            frozen,
         })
         .collect())
 }
@@ -51,19 +53,20 @@ async fn get_user_products(
 async fn get_all_products_lifetime(
     pool: &sqlx::PgPool,
 ) -> Result<Vec<ProductLicense>, sqlx::Error> {
-    let rows = sqlx::query_as::<_, (String, String)>(
-        "SELECT id, name FROM products WHERE is_active = TRUE ORDER BY name"
+    let rows = sqlx::query_as::<_, (String, String, bool)>(
+        "SELECT id, name, frozen FROM products ORDER BY name"
     )
     .fetch_all(pool)
     .await?;
 
     Ok(rows
         .into_iter()
-        .map(|(product_id, product_name)| ProductLicense {
+        .map(|(product_id, product_name, frozen)| ProductLicense {
             product_id,
             product_name,
             expires_at: "infinity".to_string(),
             time_remaining_seconds: i64::MAX,
+            frozen,
         })
         .collect())
 }

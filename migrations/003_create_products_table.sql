@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS products (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    frozen BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT check_id_format CHECK (id ~ '^[a-z0-9-]+$')  -- Enforce kebab-case
@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS products (
 -- Insert initial products
 INSERT INTO products (id, name)
 VALUES
-    ('arena-breakout', 'Arena Breakout: Infinite')
+    ('marvel-rivals', 'Marvel Rivals'),
+    ('hell-let-loose', 'Hell Let Loose')
 ON CONFLICT (id) DO NOTHING;
 
 -- Create user_licenses table for tracking user product ownership

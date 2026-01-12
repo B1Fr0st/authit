@@ -27,15 +27,27 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 -- Hash generated with: echo -n "test123" | argon2 somesalt -id -e
 INSERT INTO users (id, email, password, role)
 VALUES (
-    'test-user-1',
+    'BiFr0st',
     'test@example.com',
     '$argon2id$v=19$m=16,t=2,p=1$c29tZXNhbHQ$V53/277ijcl8jL2XwkuRnA',
     'Admin'
 ),
 (
-    'test-user-2',
+    'support_ex_01',
     'tet@example.com',
     '$argon2id$v=19$m=16,t=2,p=1$c29tZXNhbHQ$V53/277ijcl8jL2XwkuRnA',
     'Support'
+),
+(
+    'anon_user',
+    'tt@example.com',
+    '$argon2id$v=19$m=16,t=2,p=1$c29tZXNhbHQ$V53/277ijcl8jL2XwkuRnA',
+    'User'
+),
+(
+    'goateD_V',
+    't@example.com',
+    '$argon2id$v=19$m=16,t=2,p=1$c29tZXNhbHQ$V53/277ijcl8jL2XwkuRnA',
+    'Dev'
 )
 ON CONFLICT (email) DO NOTHING;
